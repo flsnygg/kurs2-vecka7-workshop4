@@ -6,25 +6,63 @@ public class Lastbil extends Anlaggningsmaskin {
     private int antalAxlar;
     private boolean harSlap;
 
+    private static final double GRUND_FORBRUKNING = 3.2;
+    private static final double FORBRUKNING_PER_TON = 0.15;
+    private static final double SLAP_EXTRA_FORBRUKNING = 1.2;
+    private static final double MEDELHASTIGHET_KMH = 60.0;
+    private static final double KM_PER_MIL = 10.0;
+
     public Lastbil(String id, String modell, double timKostnad, double lasteKapacitetTon, int antalAxlar, boolean harSlap) {
         super(id, modell, timKostnad);
         this.lasteKapacitetTon = lasteKapacitetTon;
         this.antalAxlar = antalAxlar;
         this.harSlap = harSlap;
     }
+    private boolean arOverlastad(double lastViktTon) {
+        return lastViktTon > getMaxLastKapacitet();
+    }
+    private double getMaxLastKapacitet() {
+        return harSlap ? lasteKapacitetTon * 2.0 : lasteKapacitetTon;
+    }
+    private String skapaOverlastMeddelande() {
+        return "FEL: Lastbil överlastad! Max kapacitet: "
+                + lasteKapacitetTon + "t (Släp: " + harSlap + ")";
+    }
+    private double beraknaBransleForbrukning(double strackaKm, double lastViktTon) {
+        double forbrukningPerMil = GRUND_FORBRUKNING
+                + (lastViktTon * FORBRUKNING_PER_TON)
+                + (harSlap ? SLAP_EXTRA_FORBRUKNING : 0.0);
+
+        return (strackaKm / KM_PER_MIL) * forbrukningPerMil;
+    }
+    private String skapaTransportMeddelande(double strackaKm,
+                                            double lastViktTon,
+                                            double totalBransle) {
+        return "TRANSPORT FULLFÖRD: " + getId()
+                + " kört " + strackaKm + " km med "
+                + lastViktTon + " ton last. Förbrukning: "
+                + String.format("%.1f", totalBransle) + "L.";
+    }
+    private void uppdateraDrifttimmar(double strackaKm) {
+        setDrifttimmar(getDrifttimmar() + (strackaKm / MEDELHASTIGHET_KMH));
+    }
+
+    private void uppdateraBransleNiva(double totalBransle) {
+        setBransleNiva(Math.max(0, getBransleNiva() - totalBransle));
+    }
 
     public String utforTransport(double strackaKm, double lastViktTon) {
-        if (lastViktTon > (harSlap ? lasteKapacitetTon * 2.0 : lasteKapacitetTon)) {
-            return "FEL: Lastbil överlastad! Max kapacitet: " + lasteKapacitetTon + "t (Släp: " + harSlap + ")";
+
+        if (arOverlastad(lastViktTon)) {
+            return skapaOverlastMeddelande();
         }
 
-        double forverkadBranslePerMil = 3.2 + (lastViktTon * 0.15) + (harSlap ? 1.2 : 0.0);
-        double totalBransle = (strackaKm / 10.0) * forverkadBranslePerMil;
+        double totalBransle = beraknaBransleForbrukning(strackaKm, lastViktTon);
 
-        setDrifttimmar(getDrifttimmar() + (strackaKm / 60.0)); // Antar 60 km/h medelhasighet
-        setBransleNiva(Math.max(0, getBransleNiva() - totalBransle));
+        uppdateraDrifttimmar(strackaKm);
+        uppdateraBransleNiva(totalBransle);
 
-        return "TRANSPORT FULLFÖRD: " + getId() + " kört " + strackaKm + " km med " + lastViktTon + " ton last. Förbrukning: " + String.format("%.1f", totalBransle) + "L.";
+        return skapaTransportMeddelande(strackaKm, lastViktTon, totalBransle);
     }
 
     // Getters och Setters
